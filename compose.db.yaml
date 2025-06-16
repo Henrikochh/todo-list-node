@@ -1,0 +1,9 @@
+name: m183_lb2_db
+services:
+    db:
+      build: ./db
+      container_name: m183-lb2-db
+      ports:
+        - "3306:3306"
+      environment:
+        - MARIADB_ROOT_PASSWORD=Some.Real.Secr3t
