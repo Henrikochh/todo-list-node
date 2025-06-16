@@ -1,138 +1,47 @@
--- phpMyAdmin SQL Dump
--- version 5.2.1
--- https://www.phpmyadmin.net/
---
--- Host: localhost:3306
--- Erstellungszeit: 08. Feb 2024 um 18:09
--- Server-Version: 10.6.15-MariaDB
--- PHP-Version: 8.2.14
-
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
 
-
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
-/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!40101 SET NAMES utf8mb4 */;
+CREATE DATABASE IF NOT EXISTS `m183_lb2` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `m183_lb2`;
 
 --
--- Datenbank: `m183_lb2`
+-- Table structure for table `tasks`
 --
-CREATE Database m183_lb2;
-USE m183_lb2;
-
--- --------------------------------------------------------
-
---
--- Tabellenstruktur für Tabelle `permissions`
---
-
-CREATE TABLE `permissions` (
-  `ID` bigint(20) NOT NULL,
-  `userID` bigint(20) NOT NULL,
-  `roleID` bigint(20) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
-
--- --------------------------------------------------------
+DROP TABLE IF EXISTS `tasks`;
+CREATE TABLE IF NOT EXISTS `tasks` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `task` varchar(255) NOT NULL,
+  `user_id` int NOT NULL,
+  `status` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
--- Tabellenstruktur für Tabelle `roles`
+-- Sample data for table `tasks`
 --
-
-CREATE TABLE `roles` (
-  `ID` bigint(20) NOT NULL,
-  `title` varchar(255) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
-
--- --------------------------------------------------------
+INSERT INTO `tasks` (`id`, `task`, `user_id`, `status`) VALUES
+(1, 'Redesign login page', 1, 0),
+(2, 'Implement user login', 1, 0),
+(3, 'Create database', 1, 0),
+(4, 'Implement MFA', 1, 0);
 
 --
--- Tabellenstruktur für Tabelle `tasks`
+-- Table structure for table `users`
 --
-
-CREATE TABLE `tasks` (
-  `ID` bigint(20) NOT NULL,
-  `title` varchar(255) NOT NULL,
-  `userID` bigint(20) NOT NULL,
-  `state` enum('open','in progress','done') NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
-
--- --------------------------------------------------------
+DROP TABLE IF EXISTS `users`;
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `username` varchar(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL,
+  `password` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
--- Tabellenstruktur für Tabelle `users`
+-- Sample data for table `users`
+-- The plain text password is 'admin'.
+-- You can generate new hashes using the hash-password.js script.
 --
-
-CREATE TABLE `users` (
-  `ID` bigint(20) NOT NULL,
-  `username` varchar(255) NOT NULL,
-  `password` varchar(255) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
-
---
--- Indizes der exportierten Tabellen
---
-
---
--- Indizes für die Tabelle `permissions`
---
-ALTER TABLE `permissions`
-  ADD PRIMARY KEY (`ID`);
-
---
--- Indizes für die Tabelle `roles`
---
-ALTER TABLE `roles`
-  ADD PRIMARY KEY (`ID`);
-
---
--- Indizes für die Tabelle `tasks`
---
-ALTER TABLE `tasks`
-  ADD PRIMARY KEY (`ID`);
-
---
--- Indizes für die Tabelle `users`
---
-ALTER TABLE `users`
-  ADD PRIMARY KEY (`ID`);
-
---
--- AUTO_INCREMENT für exportierte Tabellen
---
-
---
--- AUTO_INCREMENT für Tabelle `permissions`
---
-ALTER TABLE `permissions`
-  MODIFY `ID` bigint(20) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT für Tabelle `tasks`
---
-ALTER TABLE `tasks`
-  MODIFY `ID` bigint(20) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT für Tabelle `users`
---
-ALTER TABLE `users`
-  MODIFY `ID` bigint(20) NOT NULL AUTO_INCREMENT;
+INSERT INTO `users` (`id`, `username`, `password`) VALUES
+(1, 'nussbaumerv9@gmail.com', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4');
 COMMIT;
-
-
-/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
-/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
-/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-
-insert into roles (ID, title) values (2, 'User');
-insert into roles (ID, title) values (1, 'Admin');
-
-
-insert into users (ID, username, password) values (1, 'nussbaumerv9@gmail.com', '1234');
-insert into users (ID, username, password) values (2, 'henrikoch4@gmail.com', '1234');
-
-insert into permissions(ID, userID, roleID) values(null, 1, 1);
-insert into permissions(ID, userID, roleID) values(null, 2, 2);

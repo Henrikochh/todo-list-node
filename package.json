@@ -1,15 +1,16 @@
 {
-  "name": "nodejs-auth-example",
+  "name": "nodejs-todo-app-simplified",
   "version": "1.0.0",
-  "description": "Simple Node.js authentication and session handling example",
+  "description": "A simplified Node.js todo application",
   "main": "app.js",
   "scripts": {
-    "start": "nodemon --legacy-watch app.js"
+    "start": "node app.js",
+    "dev": "nodemon app.js"
   },
   "dependencies": {
     "@sendgrid/mail": "^8.1.5",
-    "axios": "^1.7.2",
     "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
     "express": "^4.17.1",
     "express-session": "^1.17.2",
     "mysql2": "^2.3.0"

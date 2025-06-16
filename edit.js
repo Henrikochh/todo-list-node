@@ -1,73 +1,38 @@
 const db = require('./fw/db');
+const { escapeHtml } = require('./fw/security');
 
-async function getHtml(req) {
-    let title = '';
-    let state = '';
-    let taskId = '';
-    let html = '';
-    let options = ["Open", "In Progress", "Done"];
+async function html(req, res) {
+    const taskId = req.query.id;
+    const userId = req.session.userid;
 
-    if(req.query.id !== undefined) {
-        console.log('req.query: ')
-        console.log(req.query);
-        console.log(req.query.id);
-        taskId = req.query.id;
-        let conn = await db.connectDB();
-        let [result, fields] = await conn.query('select ID, title, state from tasks where ID = '+taskId);
-        if(result.length > 0) {
-            title = result[0].title;
-            state = result[0].state;
-        }
+    const tasks = await db.executeStatement('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
 
-        html += `<h1>Edit Task</h1>`;
-    } else {
-        html += `<h1>Create Task</h1>`;
+    if (tasks.length === 0) {
+        return '<p>Task not found or you do not have permission to edit it.</p>';
     }
 
-    html += `
-    <form id="form" method="post" action="savetask">
-        <input type="hidden" name="id" value="`+taskId+`" />
+    const task = tasks[0];
+
+    return `
+    <h3>Edit Task</h3>
+    <form method="post" action="/savetask">
+        <input type="hidden" name="_csrf" value="${res.locals.csrfToken}">
+        <input type="hidden" name="id" value="${task.id}">
         <div class="form-group">
-            <label for="title">Description</label>
-            <input type="text" class="form-control size-medium" name="title" id="title" value="`+title+`">
+            <label for="task">Task</label>
+            <input type="text" class="form-control size-large" name="task" id="task" value="${escapeHtml(task.task)}">
         </div>
         <div class="form-group">
-            <label for="state">State</label>
-            <select name="state" id="state" class="size-auto">`;
-
-    for(let i = 0; i < options.length; i++) {
-        let selected = state === options[i].toLowerCase() ? 'selected' : '';
-        html += `<span>`+options[1]+`</span>`;
-        html += `<option value='`+options[i].toLowerCase()+`' `+selected+`>`+options[i]+`</option>`;
-    }
-
-    html += `
+            <label for="status">Status</label>
+            <select name="status" id="status" class="form-control">
+                <option value="0" ${task.status === 0 ? 'selected' : ''}>Open</option>
+                <option value="1" ${task.status === 1 ? 'selected' : ''}>Done</option>
             </select>
         </div>
         <div class="form-group">
-            <label for="submit" ></label>
-            <input id="submit" type="submit" class="btn size-auto" value="Submit" />
+            <input type="submit" class="btn" value="Save">
         </div>
-    </form>
-    <script>
-        $(document).ready(function () {
-        $('#form').validate({
-            rules: {
-                title: {
-                    required: true
-                }
-            },
-            messages: {
-                title: 'Please enter a description.',
-            },
-            submitHandler: function (form) {
-                form.submit();
-            }
-        });
-    });
-    </script>`;
-
-    return html;
+    </form>`;
 }
 
-module.exports = { html: getHtml }
+module.exports = { html };

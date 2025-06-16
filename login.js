@@ -1,114 +1,114 @@
 const db = require('./fw/db');
+const crypto = require('crypto');
 const { sendMfaCode } = require('./MFA');
+const { wrapContent } = require('./utils');
+const { escapeHtml } = require('./fw/security');
 
-async function handleLogin(req, res) {
-    let msg = '';
-    let user = { 'username': '', 'userid': 0 };
 
-    if (typeof req.query.username !== 'undefined' && typeof req.query.password !== 'undefined') {
-        let result = await validateLogin(req.query.username, req.query.password);
-
-        if (result.valid) {
-            try {
-                // Password is correct, send MFA code using username as the email
-                await sendMfaCode(result.username, result.mfaCode);
-
-                // Store user info in session for verification
-                req.session.mfaCode = result.mfaCode;
-                req.session.userId = result.userId;
-                req.session.username = result.username;
-
-                // Redirect to the MFA verification page
-                res.redirect('/mfa');
-                return; // Stop execution here
-            } catch (e) {
-                msg = "Could not send MFA code. Please try again later.";
-            }
-        } else {
-            msg = result.msg;
-        }
-    }
-
-    // If login is not initiated or failed, show the login form
-    let html = await wrapContent(msg + getHtml(), req);
-    res.send(html);
+function sha256(data) {
+    return crypto.createHash('sha256').update(data).digest('hex');
 }
 
-function startUserSession(res, user) {
-    console.log('login valid... start user session now for userid ' + user.userid);
-    res.cookie('username', user.username);
-    res.cookie('userid', user.userid);
-    res.redirect('/');
-}
-
-async function validateLogin(username, password) {
-    let result = { valid: false, msg: '', userId: 0, username: null, mfaCode: null };
-
-    // Connect to the database
-    const dbConnection = await db.connectDB();
-
-    // Use parameterized query to prevent SQL injection
-    const sql = `SELECT id, username, password FROM users WHERE username = ?`;
-    try {
-        const [results] = await dbConnection.query(sql, [username]);
-
-        if (results.length > 0) {
-            const user = results[0];
-
-            // Verify the password
-            if (password == user.password) {
-                // Generate a 6-digit MFA code
-                const mfaCode = Math.floor(100000 + Math.random() * 900000).toString();
-                result.valid = true;
-                result.userId = user.id;
-                result.username = user.username;
-                result.mfaCode = mfaCode;
-            } else {
-                // Password is incorrect
-                result.msg = 'Incorrect password';
-            }
-        } else {
-            // Username does not exist
-            result.msg = 'Username does not exist';
-        }
-    } catch (err) {
-        console.log(err);
-        result.msg = 'An error occurred during login.';
-    }
-
-    return result;
-}
-
-function getHtml() {
-    // This is the HTML for the login form
-    return `
+async function showLoginPage(req, res, message = '') {
+    const html = `
     <h2>Login</h2>
-    <form id="form" method="get" action="/login">
+    ${message ? `<p style="color: red;">${escapeHtml(message)}</p>` : ''}
+    <form id="form" method="post" action="/login">
         <div class="form-group">
             <label for="username">Username</label>
-            <input type="text" class="form-control size-medium" name="username" id="username">
+            <input type="text" class="form-control size-medium" name="username" id="username" required>
         </div>
         <div class="form-group">
             <label for="password">Password</label>
-            <input type="password" class="form-control size-medium" name="password" id="password">
+            <input type="password" class="form-control size-medium" name="password" id="password" required>
         </div>
         <div class="form-group">
-            <label for="submit" ></label>
             <input id="submit" type="submit" class="btn size-auto" value="Login" />
         </div>
     </form>`;
+    res.send(await wrapContent(html, req));
 }
 
-// Helper to wrap content with header and footer
-async function wrapContent(content, req) {
-    const header = require('./fw/header');
-    const footer = require('./fw/footer');
-    let headerHtml = await header(req);
-    return headerHtml + content + footer;
+async function handleLogin(req, res) {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return showLoginPage(req, res, 'Username and password are required.');
+    }
+
+    try {
+        const users = await db.executeStatement('SELECT id, username, password FROM users WHERE username = ?', [username]);
+
+        if (users.length === 0) {
+            return showLoginPage(req, res, 'Invalid username or password.');
+        }
+
+        const user = users[0];
+        const hashedPassword = sha256(password);
+
+        if (hashedPassword === user.password) {
+            const mfaCode = Math.floor(100000 + Math.random() * 900000).toString();
+            await sendMfaCode(user.username, mfaCode);
+
+            req.session.mfa_userid = user.id;
+            req.session.mfa_username = user.username;
+            req.session.mfa_code = mfaCode;
+            
+            res.redirect('/mfa');
+        } else {
+            return showLoginPage(req, res, 'Invalid username or password.');
+        }
+    } catch (e) {
+        console.error(e);
+        return showLoginPage(req, res, 'An error occurred. Please try again.');
+    }
 }
 
+async function showMfaPage(req, res, message = '') {
+    if (!req.session.mfa_userid) {
+        return res.redirect('/login');
+    }
+    const mfaForm = `
+        <h2>Enter MFA Code</h2>
+        <p>An email has been sent to you with a verification code.</p>
+        ${message ? `<p style="color: red;">${escapeHtml(message)}</p>` : ''}
+        <form id="mfa-form" method="post" action="/mfa-verify">
+            <div class="form-group">
+                <label for="mfaCode">MFA Code</label>
+                <input type="text" class="form-control size-medium" name="mfaCode" id="mfaCode" required>
+            </div>
+            <div class="form-group">
+                <input id="submit" type="submit" class="btn size-auto" value="Verify" />
+            </div>
+        </form>`;
+    res.send(await wrapContent(mfaForm, req));
+}
+
+async function verifyMfa(req, res) {
+    const { mfaCode } = req.body;
+    const { mfa_userid, mfa_username, mfa_code } = req.session;
+
+    if (!mfa_userid) {
+        return res.redirect('/login');
+    }
+
+    if (mfaCode && mfaCode === mfa_code) {
+        req.session.loggedin = true;
+        req.session.userid = mfa_userid;
+        req.session.username = mfa_username;
+
+        delete req.session.mfa_userid;
+        delete req.session.mfa_username;
+        delete req.session.mfa_code;
+        
+        res.redirect('/');
+    } else {
+        await showMfaPage(req, res, 'Incorrect code. Please try again.');
+    }
+}
 
 module.exports = {
+    showLoginPage,
     handleLogin,
-    startUserSession
+    showMfaPage,
+    verifyMfa,
 };
