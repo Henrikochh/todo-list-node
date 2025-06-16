@@ -15,14 +15,14 @@ const searchProvider = require('./search/v2/index');
 const app = express();
 const PORT = 3000;
 
-// Middleware für Session-Handling
+// Middleware for Session-Handling
 app.use(session({
     secret: 'secret',
     resave: true,
     saveUninitialized: true
 }));
 
-// Middleware für Body-Parser
+// Middleware for Body-Parser
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -49,7 +49,7 @@ app.post('/', async (req, res) => {
 
 // edit task
 app.get('/admin/users', async (req, res) => {
-    if(activeUserSession(req)) {
+    if (activeUserSession(req)) {
         let html = await wrapContent(await adminUser.html, req);
         res.send(html);
     } else {
@@ -69,23 +69,69 @@ app.get('/edit', async (req, res) => {
 
 // Login-Seite anzeigen
 app.get('/login', async (req, res) => {
-    let content = await login.handleLogin(req, res);
+    await login.handleLogin(req, res);
+});
 
-    if(content.user.userid !== 0) {
-        // login was successful... set cookies and redirect to /
-        login.startUserSession(res, content.user);
+// MFA page to enter the code
+app.get('/mfa', async (req, res) => {
+    if (!req.session.mfaCode) {
+        return res.redirect('/login');
+    }
+    const mfaForm = `
+        <h2>Enter MFA Code</h2>
+        <p>An email has been sent to you with a verification code.</p>
+        <form id="mfa-form" method="post" action="/mfa-verify">
+            <div class="form-group">
+                <label for="mfaCode">MFA Code</label>
+                <input type="text" class="form-control size-medium" name="mfaCode" id="mfaCode" required>
+            </div>
+            <div class="form-group">
+                <input id="submit" type="submit" class="btn size-auto" value="Verify" />
+            </div>
+        </form>`;
+    let html = await wrapContent(mfaForm, req);
+    res.send(html);
+});
+
+// MFA verification
+app.post('/mfa-verify', async (req, res) => {
+    const { mfaCode } = req.body;
+    const { mfaCode: sessionMfaCode, userId, username } = req.session;
+
+    if (!sessionMfaCode) {
+        return res.redirect('/login');
+    }
+
+    if (mfaCode && mfaCode === sessionMfaCode) {
+        // MFA correct, start user session
+        delete req.session.mfaCode; // Clean up session
+        const user = { userid: userId, username: username };
+        login.startUserSession(res, user);
     } else {
-        // login unsuccessful or not made jet... display login form
-        let html = await wrapContent(content.html, req);
-        res.send(html);
+        // MFA incorrect
+        const mfaForm = `
+            <h2>Enter MFA Code</h2>
+            <p style="color: red;">Incorrect code. Please try again.</p>
+            <form id="mfa-form" method="post" action="/mfa-verify">
+                <div class="form-group">
+                    <label for="mfaCode">MFA Code</label>
+                    <input type="text" class="form-control size-medium" name="mfaCode" id="mfaCode" required>
+                </div>
+                <div class="form-group">
+                    <input id="submit" type="submit" class="btn size-auto" value="Verify" />
+                </div>
+            </form>`;
+        let html = await wrapContent(mfaForm, req);
+        res.status(401).send(html);
     }
 });
+
 
 // Logout
 app.get('/logout', (req, res) => {
     req.session.destroy();
-    res.cookie('username','');
-    res.cookie('userid','');
+    res.cookie('username', '');
+    res.cookie('userid', '');
     res.redirect('/login');
 });
 
@@ -128,7 +174,7 @@ app.listen(PORT, () => {
 
 async function wrapContent(content, req) {
     let headerHtml = await header(req);
-    return headerHtml+content+footer;
+    return headerHtml + content + footer;
 }
 
 function activeUserSession(req) {

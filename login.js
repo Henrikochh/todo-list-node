@@ -1,54 +1,68 @@
 const db = require('./fw/db');
+const { sendMfaCode } = require('./MFA');
 
 async function handleLogin(req, res) {
     let msg = '';
     let user = { 'username': '', 'userid': 0 };
 
-    if(typeof req.query.username !== 'undefined' && typeof req.query.password !== 'undefined') {
-        // Get username and password from the form and call the validateLogin
+    if (typeof req.query.username !== 'undefined' && typeof req.query.password !== 'undefined') {
         let result = await validateLogin(req.query.username, req.query.password);
 
-        if(result.valid) {
-            // Login is correct. Store user information to be returned.
-            user.username = req.query.username;
-            user.userid = result.userId;
-            msg = result.msg;
+        if (result.valid) {
+            try {
+                // Password is correct, send MFA code using username as the email
+                await sendMfaCode(result.username, result.mfaCode);
+
+                // Store user info in session for verification
+                req.session.mfaCode = result.mfaCode;
+                req.session.userId = result.userId;
+                req.session.username = result.username;
+
+                // Redirect to the MFA verification page
+                res.redirect('/mfa');
+                return; // Stop execution here
+            } catch (e) {
+                msg = "Could not send MFA code. Please try again later.";
+            }
         } else {
             msg = result.msg;
         }
     }
 
-    return { 'html': msg + getHtml(), 'user': user };
+    // If login is not initiated or failed, show the login form
+    let html = await wrapContent(msg + getHtml(), req);
+    res.send(html);
 }
 
 function startUserSession(res, user) {
-    console.log('login valid... start user session now for userid '+user.userid);
+    console.log('login valid... start user session now for userid ' + user.userid);
     res.cookie('username', user.username);
     res.cookie('userid', user.userid);
     res.redirect('/');
 }
 
-async function validateLogin (username, password) {
-    let result = { valid: false, msg: '', userId: 0 };
+async function validateLogin(username, password) {
+    let result = { valid: false, msg: '', userId: 0, username: null, mfaCode: null };
 
     // Connect to the database
     const dbConnection = await db.connectDB();
 
-    const sql = `SELECT id, username, password FROM users WHERE username='`+username+`'`;
+    // Use parameterized query to prevent SQL injection
+    const sql = `SELECT id, username, password FROM users WHERE username = ?`;
     try {
-        const [results, fields] = await dbConnection.query(sql);
+        const [results] = await dbConnection.query(sql, [username]);
 
-        if(results.length > 0) {
-            // Bind the result variables
-            let db_id = results[0].id;
-            let db_username = results[0].username;
-            let db_password = results[0].password;
+        if (results.length > 0) {
+            const user = results[0];
 
             // Verify the password
-            if (password == db_password) {
-                result.userId = db_id;
+            if (password == user.password) {
+                // Generate a 6-digit MFA code
+                const mfaCode = Math.floor(100000 + Math.random() * 900000).toString();
                 result.valid = true;
-                result.msg = 'login correct';
+                result.userId = user.id;
+                result.username = user.username;
+                result.mfaCode = mfaCode;
             } else {
                 // Password is incorrect
                 result.msg = 'Incorrect password';
@@ -57,20 +71,18 @@ async function validateLogin (username, password) {
             // Username does not exist
             result.msg = 'Username does not exist';
         }
-
-        console.log(results); // results contains rows returned by server
-        //console.log(fields); // fields contains extra meta data about results, if available
     } catch (err) {
         console.log(err);
+        result.msg = 'An error occurred during login.';
     }
-    
+
     return result;
 }
 
 function getHtml() {
+    // This is the HTML for the login form
     return `
     <h2>Login</h2>
-
     <form id="form" method="get" action="/login">
         <div class="form-group">
             <label for="username">Username</label>
@@ -78,7 +90,7 @@ function getHtml() {
         </div>
         <div class="form-group">
             <label for="password">Password</label>
-            <input type="text" class="form-control size-medium" name="password" id="password">
+            <input type="password" class="form-control size-medium" name="password" id="password">
         </div>
         <div class="form-group">
             <label for="submit" ></label>
@@ -87,7 +99,16 @@ function getHtml() {
     </form>`;
 }
 
+// Helper to wrap content with header and footer
+async function wrapContent(content, req) {
+    const header = require('./fw/header');
+    const footer = require('./fw/footer');
+    let headerHtml = await header(req);
+    return headerHtml + content + footer;
+}
+
+
 module.exports = {
-    handleLogin: handleLogin,
-    startUserSession: startUserSession
+    handleLogin,
+    startUserSession
 };

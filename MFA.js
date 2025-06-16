@@ -1,20 +1,27 @@
-const sgMail = require('@sendgrid/mail')
-sgMail.setApiKey(process.env.SENDGRID_API_KEY)
-// sgMail.setDataResidency('eu'); 
-// uncomment the above line if you are sending mail using a regional EU subuser
+const sgMail = require('@sendgrid/mail');
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// sgMail.setDataResidency('eu'); // Uncomment if you use the EU region for SendGrid
 
-const msg = {
-  to: 'nussbaumerv9@gmail.com', // Change to your recipient
-  from: 'mail@valentin-nussbaumer.com', // Change to your verified sender
-  subject: 'Sending with SendGrid is Fun',
-  text: 'and easy to do anywhere, even with Node.js',
-  html: '<strong>and easy to do anywhere, even with Node.js</strong>',
+async function sendMfaCode(to, code) {
+    const msg = {
+        to: to, // The recipient's email address (which is the username)
+        from: 'mail@valentin-nussbaumer.com', // A verified sender in your SendGrid account
+        subject: 'Your Verification Code',
+        text: `Your verification code is: ${code}`,
+        html: `<strong>Your verification code is: ${code}</strong>`,
+    };
+
+    try {
+        await sgMail.send(msg);
+        console.log('MFA Email sent successfully.');
+    } catch (error) {
+        console.error('Error sending MFA email:', error);
+        if (error.response) {
+            console.error(error.response.body);
+        }
+        // Throw an error to be handled by the calling function
+        throw new Error('Could not send MFA code.');
+    }
 }
-sgMail
-  .send(msg)
-  .then(() => {
-    console.log('Email sent')
-  })
-  .catch((error) => {
-    console.error(error)
-  })
+
+module.exports = { sendMfaCode };
