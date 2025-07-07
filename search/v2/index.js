@@ -1,18 +1,20 @@
 const db = require('../../fw/db');
+const { escapeHtml } = require('../../fw/security');
 
 async function search(req) {
-    if (req.query.userid === undefined || req.query.terms === undefined){
+    const userid = req.session.userid;
+    const terms = req.query.terms;
+
+    if (!userid || !terms) {
         return "Not enough information to search";
     }
 
-    let userid = req.query.userid;
-    let terms = req.query.terms;
     let result = '';
 
-    let stmt = await db.executeStatement("select ID, title, state from tasks where userID = "+userid+" and title like '%"+terms+"%'");
+    const stmt = await db.executeStatement('SELECT ID, title, state FROM tasks WHERE userID = ? AND title LIKE ?', [userid, `%${terms}%`]);
     if (stmt.length > 0) {
         stmt.forEach(function(row) {
-            result += row.title+' ('+row.state+')<br />';
+            result += `${escapeHtml(row.title)} (${escapeHtml(row.state)})<br />`;
         });
     }
 

@@ -3,11 +3,14 @@ const express = require('express');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
+
 const { wrapContent } = require('./utils');
 const login = require('./login');
 const index = require('./index');
 const editTask = require('./edit');
 const saveTask = require('./savetask');
+const search = require('./search');
 
 const app = express();
 const PORT = 3000;
@@ -37,6 +40,14 @@ function requireLogin(req, res, next) {
     }
 }
 
+// Rate limiting
+const searchLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 // Routes
 app.get('/', requireLogin, async (req, res) => {
     let html = await wrapContent(await index.html(req, res), req);
@@ -56,6 +67,11 @@ app.get('/edit', requireLogin, async (req, res) => {
 app.post('/savetask', requireLogin, async (req, res) => {
     await saveTask.save(req, res);
     res.redirect('/');
+});
+
+app.post('/search', requireLogin, searchLimiter, async (req, res) => {
+    let html = await wrapContent(await search.html(req, res), req);
+    res.send(html);
 });
 
 // Login and MFA routes

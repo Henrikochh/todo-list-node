@@ -1,20 +1,22 @@
 const axios = require('axios');
 const querystring = require('querystring');
 
+const allowedProviders = ['/search/v2'];
+
 async function getHtml(req) {
-    if (req.body.provider === undefined || req.body.terms === undefined || req.body.userid === undefined){
+    const { provider, terms } = req.body;
+    const userid = req.session.userid;
+
+    if (!provider || !terms || !userid) {
         return "Not enough information provided";
     }
 
-    let provider = req.body.provider;
-    let terms = req.body.terms;
-    let userid = req.body.userid;
+    if (!allowedProviders.includes(provider)) {
+        return "Invalid provider";
+    }
 
-    await sleep(1000); // this is a long, long search!!
-
-    let theUrl='http://localhost:3000'+provider+'?userid='+userid+'&terms='+terms;
-    let result = await callAPI('GET', theUrl, false);
-    return result;
+    const theUrl = `http://localhost:3000${provider}?userid=${userid}&terms=${terms}`;
+    return await callAPI('GET', theUrl, false);
 }
 
 async function callAPI(method, url, data){
